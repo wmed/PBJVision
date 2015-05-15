@@ -91,7 +91,7 @@
     self = [super init];
     if (self) {
         NSError *error = nil;
-        _assetWriter = [AVAssetWriter assetWriterWithURL:outputURL fileType:(NSString *)kUTTypeMPEG4 error:&error];
+        _assetWriter = [AVAssetWriter assetWriterWithURL:outputURL fileType:(NSString *)kUTTypeQuickTimeMovie error:&error];
         if (error) {
             DLog(@"error setting up the asset writer (%@)", error);
             _assetWriter = nil;

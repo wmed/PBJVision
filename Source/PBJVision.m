@@ -101,7 +101,9 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
     AVCaptureStillImageOutput *_captureOutputPhoto;
     AVCaptureAudioDataOutput *_captureOutputAudio;
     AVCaptureVideoDataOutput *_captureOutputVideo;
-
+    AVCaptureDeviceFormat         *_defaultBackFormat;
+    AVCaptureDeviceFormat         *_defaultFrontFormat;
+    
     // vision core
 
     PBJMediaWriter *_mediaWriter;
@@ -562,7 +564,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
 
     CMTime fps = CMTimeMake(1, (int32_t)videoFrameRate);
 
-    AVCaptureDevice *videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    AVCaptureDevice *videoDevice = _currentDevice;
     AVCaptureDeviceFormat *supportingFormat = nil;
     int32_t maxWidth = 0;
 
@@ -582,6 +584,14 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
         }
     }
     
+    if (videoFrameRate <= 30)
+    {
+        if (_currentDevice == _captureDeviceFront)
+            supportingFormat = _defaultFrontFormat;
+        else if (_currentDevice == _captureDeviceBack)
+            supportingFormat = _defaultBackFormat;
+    }
+    
     if (supportingFormat) {
         NSError *error = nil;
         [_captureSession beginConfiguration];  // the session to which the receiver's AVCaptureDeviceInput is added.
@@ -596,6 +606,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
         }
     }
     [_captureSession commitConfiguration];
+    DLog(@"send framerate update to delegate  %@ ", _delegate);
     [self _enqueueBlockOnMainQueue:^{
         if ([_delegate respondsToSelector:@selector(visionDidChangeVideoFormatAndFrameRate:)])
             [_delegate visionDidChangeVideoFormatAndFrameRate:self];
@@ -616,9 +627,9 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
 
 - (BOOL)supportsVideoFrameRate:(NSInteger)videoFrameRate
 {
-    AVCaptureDevice *videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    //AVCaptureDevice *videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
 
-    NSArray *formats = [videoDevice formats];
+    NSArray *formats = [_currentDevice formats];
     for (AVCaptureDeviceFormat *format in formats) {
         NSArray *videoSupportedFrameRateRanges = [format videoSupportedFrameRateRanges];
         for (AVFrameRateRange *frameRateRange in videoSupportedFrameRateRanges) {
@@ -643,6 +654,8 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
             DLog(@"failed to create GL context");
         }
         [self _setupGL];
+        
+        //_currentDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
         
         _captureSessionPreset = AVCaptureSessionPresetMedium;
         _captureDirectory = nil;
@@ -760,7 +773,10 @@ typedef void (^PBJVisionBlock)();
 
     // capture devices
     _captureDeviceFront = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionFront];
+    _defaultFrontFormat = _captureDeviceFront.activeFormat;
+    
     _captureDeviceBack = [PBJVisionUtilities captureDeviceForPosition:AVCaptureDevicePositionBack];
+    _defaultBackFormat = _captureDeviceBack.activeFormat;
 
     // capture device inputs
     NSError *error = nil;
@@ -1726,7 +1742,7 @@ typedef void (^PBJVisionBlock)();
         return;
     }
     
-    DLog(@"starting video capture");
+    DLog(@"starting video capture %@", _currentDevice.activeFormat);
         
     [self _enqueueBlockOnCaptureVideoQueue:^{
 
@@ -1734,7 +1750,7 @@ typedef void (^PBJVisionBlock)();
             return;
 	
         NSString *guid = [[NSUUID new] UUIDString];
-        NSString *outputFile = [NSString stringWithFormat:@"video_%@.mp4", guid];
+        NSString *outputFile = [NSString stringWithFormat:@"video_%@.mov", guid];
         
         if ([_delegate respondsToSelector:@selector(vision:willStartVideoCaptureToFile:)]) {
             outputFile = [_delegate vision:self willStartVideoCaptureToFile:outputFile];
